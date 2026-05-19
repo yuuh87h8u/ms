@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Holistic Visualizer</title>
+
+  <!-- MediaPipe UMD globals -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+
+  <!-- Three.js ESM importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+
+    #toolbar label {
+      font-size: 12px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn {
+      padding: 5px 14px;
+      border-radius: 5px;
+      border: 1px solid #444;
+      background: #2a2a2a;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn:hover { background: #383838; }
+    .btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    #view-mode {
+      padding: 5px 10px;
+      border-radius: 5px;
+      border: 1px solid #444;
+      background: #2a2a2a;
+      color: #ccc;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .sep {
+      width: 1px;
+      height: 22px;
+      background: #444;
+    }
+
+    #status {
+      margin-left: auto;
+      font-size: 12px;
+      color: #888;
+    }
+    #status.tracking { color: #4ade80; }
+
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #left-panel {
+      position: relative;
+      width: 50%;
+      background: #000;
+      flex-shrink: 0;
+    }
+
+    #webcam-view {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    #input-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1);
+    }
+
+    #overlay-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    #upload-panel {
+      display: none;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      background: #0d0d0d;
+    }
+    #upload-panel.active { display: flex; }
+
+    #upload-prompt {
+      font-size: 14px;
+      color: #888;
+    }
+
+    #right-panel {
+      flex: 1;
+      position: relative;
+      background: #0a0a0a;
+    }
+
+    #three-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #hint {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #444;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <label>Source</label>
+  <button id="btn-webcam" class="btn active">Webcam</button>
+  <button id="btn-upload-btn" class="btn">Video File</button>
+  <input type="file" id="file-input" accept="video/*" style="display:none">
+
+  <div class="sep"></div>
+
+  <label>View</label>
+  <select id="view-mode">
+    <option value="both">Skeleton + Skin</option>
+    <option value="skeleton">Skeleton Only</option>
+    <option value="skin">Skin Only</option>
+  </select>
+
+  <span id="status">Initializing…</span>
+</div>
+
+<div id="main">
+
+  <div id="left-panel">
+    <div id="webcam-view">
+      <video id="input-video" playsinline autoplay muted></video>
+      <canvas id="overlay-canvas"></canvas>
+    </div>
+
+    <div id="upload-panel">
+      <p id="upload-prompt">No video loaded. Use “Video File” button to open one.</p>
+      <div id="upload-video-wrap" style="display:none; position:relative; width:100%; height:100%;">
+        <video id="upload-video" controls loop style="width:100%;height:100%;object-fit:contain;display:block;"></video>
+        <canvas id="upload-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <canvas id="three-canvas"></canvas>
+    <div id="hint">Drag to rotate · Scroll to zoom · Right-drag to pan</div>
+  </div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
