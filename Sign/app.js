@@ -66,25 +66,17 @@ const skelLines = new THREE.LineSegments(
   skelGeom,
   new THREE.LineBasicMaterial({ color: 0xffffff })
 );
-scene.add(skelLines);
 
 const JOINT_COUNT = 110;
 const jointGeom = new THREE.SphereGeometry(0.018, 6, 6);
 const jointMat  = new THREE.MeshPhongMaterial({ color: 0xcccccc });
 const jointInstanced = new THREE.InstancedMesh(jointGeom, jointMat, JOINT_COUNT);
 jointInstanced.frustumCulled = false;
-scene.add(jointInstanced);
 
-// Group for easy show/hide
 const skelGroup = new THREE.Group();
 skelGroup.add(skelLines);
 skelGroup.add(jointInstanced);
 scene.add(skelGroup);
-// (lines and instanced mesh were added to scene directly; move to group)
-scene.remove(skelLines);
-scene.remove(jointInstanced);
-skelGroup.add(skelLines);
-skelGroup.add(jointInstanced);
 
 // ── Skin mesh ───────────────────────────────────────────────────────────────
 const skinMesh = new SkinMesh(scene, landmarkToVec3);
@@ -202,17 +194,24 @@ function draw2DOverlay(results) {
   const canvas = activeOverlayCanvas;
   const ctx    = activeOverlayCtx;
 
-  canvas.width  = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  canvas.width  = canvas.clientWidth  || canvas.offsetWidth  || 640;
+  canvas.height = canvas.clientHeight || canvas.offsetHeight || 480;
 
-  ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Mirror only for webcam mode (webcam video is CSS-mirrored but overlay is not)
-  if (activeSource === 'webcam') {
-    ctx.scale(-1, 1);
-    ctx.translate(-canvas.width, 0);
+  const mirror = activeSource === 'webcam';
+
+  // Draw the video frame onto the canvas (reliable cross-platform, fixes black panel)
+  if (results.image) {
+    ctx.save();
+    if (mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
+
+  // Draw landmarks on top
+  ctx.save();
+  if (mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
 
   if (results.poseLandmarks && window.drawConnectors && window.drawLandmarks) {
     drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS,

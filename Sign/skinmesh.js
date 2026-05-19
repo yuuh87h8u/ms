@@ -50,7 +50,6 @@ const KNUCKLE_RADII = [
 const _up  = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
-const _altUp = new THREE.Vector3(1, 0, 0);
 
 function orientCylinder(mesh, A, B, radius) {
   _dir.subVectors(B, A);
@@ -75,6 +74,12 @@ function orientCylinder(mesh, A, B, radius) {
 export class SkinMesh {
   constructor(scene, landmarkToVec3) {
     this.l2v = landmarkToVec3;
+    // Face z values from MediaPipe are very small — amplify for visible 3D depth
+    this.l2vFace = (lm) => {
+      const v = landmarkToVec3(lm);
+      v.z *= 5.0;
+      return v;
+    };
     this.group = new THREE.Group();
     scene.add(this.group);
 
@@ -166,13 +171,13 @@ export class SkinMesh {
   }
 
   update(pose, face, lhand, rhand) {
-    this._updateBody(pose);
+    this._updateBody(pose, !!face);
     this._updateFace(face);
     this._updateHand(lhand, 0);
     this._updateHand(rhand, 1);
   }
 
-  _updateBody(pose) {
+  _updateBody(pose, faceActive) {
     if (!pose) {
       this.limbMeshes.forEach(m => m.visible = false);
       this.jointSpheres.forEach(m => m.visible = false);
@@ -196,7 +201,12 @@ export class SkinMesh {
       }
     });
 
-    // Head: centered between ears (7=left ear, 8=right ear)
+    // Only show head sphere when face mesh is NOT active (avoids double-rendering blob)
+    if (faceActive) {
+      this.headMesh.visible = false;
+      return;
+    }
+
     const lEarVis = (pose[7].visibility ?? 0) > 0.2;
     const rEarVis = (pose[8].visibility ?? 0) > 0.2;
     if (lEarVis || rEarVis) {
@@ -230,7 +240,7 @@ export class SkinMesh {
     const p = this._facePositions;
     const count = Math.min(face.length, 478);
     for (let i = 0; i < count; i++) {
-      const v = this.l2v(face[i]);
+      const v = this.l2vFace(face[i]);
       p[i * 3]     = v.x;
       p[i * 3 + 1] = v.y;
       p[i * 3 + 2] = v.z;
@@ -243,11 +253,10 @@ export class SkinMesh {
 
     // Eyeballs: iris landmarks at 468 (left) and 473 (right), need 478 total
     if (face.length >= 478) {
-      const lCenter = this.l2v(face[468]);
-      const rCenter = this.l2v(face[473]);
-      // Eye radius from inner/outer corner distance
-      const inner = this.l2v(face[133]);
-      const outer = this.l2v(face[33]);
+      const lCenter = this.l2vFace(face[468]);
+      const rCenter = this.l2vFace(face[473]);
+      const inner = this.l2vFace(face[133]);
+      const outer = this.l2vFace(face[33]);
       const eyeR = inner.distanceTo(outer) * 0.26;
       const r = eyeR > 0.005 ? eyeR : 0.030;
 
