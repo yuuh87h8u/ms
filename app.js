@@ -78,7 +78,7 @@ const skinMesh = new SkinMesh(scene, landmarkToVec3);
 const viewModeEl = document.getElementById('view-mode');
 viewModeEl.addEventListener('change', () => {
   const m = viewModeEl.value;
-  skelGroup.visible  = m !== 'skin';
+  skelGroup.visible      = m !== 'skin';
   skinMesh.group.visible = m !== 'skeleton';
 });
 
@@ -120,9 +120,8 @@ function updateSkeleton(pose, face, lhand, rhand) {
     const pc = window.POSE_CONNECTIONS || [];
     for (const pair of pc) {
       const [s, e] = pairValues(pair);
-      if ((pose[s].visibility ?? 1) > 0.3 && (pose[e].visibility ?? 1) > 0.3) {
+      if ((pose[s].visibility ?? 1) > 0.3 && (pose[e].visibility ?? 1) > 0.3)
         addSeg(verts[s], verts[e]);
-      }
     }
     for (let i = 0; i < 33; i++) {
       if ((pose[i].visibility ?? 1) > 0.3) addJoint(verts[i]);
@@ -158,35 +157,42 @@ function updateSkeleton(pose, face, lhand, rhand) {
   jointInstanced.count = JOINT_COUNT;
 }
 
-const overlayCanvas  = document.getElementById('overlay-canvas');
-const overlayCtx     = overlayCanvas.getContext('2d');
-const uploadOverlay  = document.getElementById('upload-overlay');
+const overlayCanvas    = document.getElementById('overlay-canvas');
+const overlayCtx       = overlayCanvas.getContext('2d');
+const uploadOverlay    = document.getElementById('upload-overlay');
 const uploadOverlayCtx = uploadOverlay.getContext('2d');
 
 let activeOverlayCanvas = overlayCanvas;
 let activeOverlayCtx    = overlayCtx;
-let activeSource = 'webcam';
+let activeSource        = 'webcam';
 
 function draw2DOverlay(results) {
   const canvas = activeOverlayCanvas;
   const ctx    = activeOverlayCtx;
 
-  canvas.width  = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  canvas.width  = canvas.clientWidth  || canvas.offsetWidth  || 640;
+  canvas.height = canvas.clientHeight || canvas.offsetHeight || 480;
 
-  ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (activeSource === 'webcam') {
-    ctx.scale(-1, 1);
-    ctx.translate(-canvas.width, 0);
+  const mirror = activeSource === 'webcam';
+
+  // Draw video frame onto canvas (reliable cross-platform — fixes black panel)
+  if (results.image) {
+    ctx.save();
+    if (mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
+
+  // Landmark overlays
+  ctx.save();
+  if (mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
 
   if (results.poseLandmarks && window.drawConnectors && window.drawLandmarks) {
     drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS,
       { color: '#00FF00', lineWidth: 1.5 });
-    drawLandmarks(ctx, results.poseLandmarks,
-      { color: '#FF3333', lineWidth: 1, radius: 2 });
+    drawLandmarks(ctx, results.poseLandmarks, { color: '#FF3333', lineWidth: 1, radius: 2 });
   }
   if (results.faceLandmarks && window.drawConnectors && window.FACEMESH_TESSELATION) {
     drawConnectors(ctx, results.faceLandmarks, window.FACEMESH_TESSELATION,
@@ -246,7 +252,7 @@ const fileInput     = document.getElementById('file-input');
 const btnWebcam     = document.getElementById('btn-webcam');
 const btnUpload     = document.getElementById('btn-upload-btn');
 
-let mpCamera     = null;
+let mpCamera           = null;
 let uploadFrameRunning = false;
 
 function showWebcam() {
@@ -303,10 +309,7 @@ function driveUploadVideo() {
 
 btnWebcam.addEventListener('click', startWebcam);
 
-btnUpload.addEventListener('click', () => {
-  fileInput.value = '';
-  fileInput.click();
-});
+btnUpload.addEventListener('click', () => { fileInput.value = ''; fileInput.click(); });
 
 fileInput.addEventListener('change', e => {
   const file = e.target.files[0];

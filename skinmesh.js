@@ -38,8 +38,8 @@ const KNUCKLE_RADII = [
   0.016, 0.012, 0.010, 0.009,
 ];
 
-const _up  = new THREE.Vector3(0, 1, 0);
-const _dir = new THREE.Vector3();
+const _up   = new THREE.Vector3(0, 1, 0);
+const _dir  = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 
 function orientCylinder(mesh, A, B, radius) {
@@ -50,7 +50,7 @@ function orientCylinder(mesh, A, B, radius) {
   mesh.position.copy(A).addScaledVector(_dir, len * 0.5);
   mesh.scale.set(radius, len * 0.5, radius);
   if (Math.abs(_dir.y) > 0.9999) {
-    if (_dir.y < 0) _quat.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI);
+    if (_dir.y < 0) _quat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
     else _quat.identity();
   } else {
     _quat.setFromUnitVectors(_up, _dir);
@@ -62,26 +62,28 @@ function orientCylinder(mesh, A, B, radius) {
 export class SkinMesh {
   constructor(scene, landmarkToVec3) {
     this.l2v = landmarkToVec3;
+    // Face z from MediaPipe is tiny relative to x/y — amplify so face looks 3D
+    this.l2vFace = (lm) => {
+      const v = landmarkToVec3(lm);
+      v.z *= 5.0;
+      return v;
+    };
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    const skinMat = new THREE.MeshPhongMaterial({ color: 0xFFDBAC, shininess: 30, specular: 0x333333 });
-    const faceMat = new THREE.MeshPhongMaterial({ color: 0xF0C8A0, shininess: 20, side: THREE.DoubleSide });
+    const skinMat     = new THREE.MeshPhongMaterial({ color: 0xFFDBAC, shininess: 30, specular: 0x333333 });
+    const faceMat     = new THREE.MeshPhongMaterial({ color: 0xF0C8A0, shininess: 20, side: THREE.DoubleSide });
     const eyeWhiteMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 });
-    const irisMat = new THREE.MeshPhongMaterial({ color: 0x2244AA, shininess: 60 });
+    const irisMat     = new THREE.MeshPhongMaterial({ color: 0x2244AA, shininess: 60 });
 
     const cylGeom = new THREE.CylinderGeometry(1, 1, 2, 8);
     this.limbMeshes = LIMB_SEGMENTS.map(() => {
-      const m = new THREE.Mesh(cylGeom, skinMat);
-      this.group.add(m);
-      return m;
+      const m = new THREE.Mesh(cylGeom, skinMat); this.group.add(m); return m;
     });
 
     const sphGeom = new THREE.SphereGeometry(1, 8, 6);
     this.jointSpheres = JOINT_INDICES.map(() => {
-      const m = new THREE.Mesh(sphGeom, skinMat);
-      this.group.add(m);
-      return m;
+      const m = new THREE.Mesh(sphGeom, skinMat); this.group.add(m); return m;
     });
 
     this.headMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), skinMat);
@@ -99,18 +101,14 @@ export class SkinMesh {
 
     const smCylGeom = new THREE.CylinderGeometry(1, 1, 2, 6);
     const smSphGeom = new THREE.SphereGeometry(1, 6, 4);
-    this.handSegs = [[], []];
+    this.handSegs   = [[], []];
     this.handJoints = [[], []];
     for (let h = 0; h < 2; h++) {
       for (let i = 0; i < FINGER_SEGMENTS.length; i++) {
-        const m = new THREE.Mesh(smCylGeom, skinMat);
-        this.group.add(m);
-        this.handSegs[h].push(m);
+        const m = new THREE.Mesh(smCylGeom, skinMat); this.group.add(m); this.handSegs[h].push(m);
       }
       for (let j = 0; j < 21; j++) {
-        const m = new THREE.Mesh(smSphGeom, skinMat);
-        this.group.add(m);
-        this.handJoints[h].push(m);
+        const m = new THREE.Mesh(smSphGeom, skinMat); this.group.add(m); this.handJoints[h].push(m);
       }
     }
   }
@@ -140,13 +138,13 @@ export class SkinMesh {
   }
 
   update(pose, face, lhand, rhand) {
-    this._updateBody(pose);
+    this._updateBody(pose, !!face);
     this._updateFace(face);
     this._updateHand(lhand, 0);
     this._updateHand(rhand, 1);
   }
 
-  _updateBody(pose) {
+  _updateBody(pose, faceActive) {
     if (!pose) {
       this.limbMeshes.forEach(m => m.visible = false);
       this.jointSpheres.forEach(m => m.visible = false);
@@ -170,11 +168,13 @@ export class SkinMesh {
       }
     });
 
+    // When face mesh is active, suppress the head sphere (avoids the double-blob)
+    if (faceActive) { this.headMesh.visible = false; return; }
+
     const lEarVis = (pose[7].visibility ?? 0) > 0.2;
     const rEarVis = (pose[8].visibility ?? 0) > 0.2;
     if (lEarVis || rEarVis) {
-      const lEar = verts[7];
-      const rEar = verts[8];
+      const lEar = verts[7], rEar = verts[8];
       this.headMesh.position.copy(lEar).add(rEar).multiplyScalar(0.5);
       const r = lEar.distanceTo(rEar) * 0.60;
       this.headMesh.scale.setScalar(r > 0.01 ? r : 0.12);
@@ -192,18 +192,13 @@ export class SkinMesh {
     }
     if (!this._faceIndexBuilt) {
       const idx = this._buildFaceIndices();
-      if (idx) {
-        this._faceGeom.setIndex(new THREE.BufferAttribute(idx, 1));
-        this._faceIndexBuilt = true;
-      }
+      if (idx) { this._faceGeom.setIndex(new THREE.BufferAttribute(idx, 1)); this._faceIndexBuilt = true; }
     }
     const p = this._facePositions;
     const count = Math.min(face.length, 478);
     for (let i = 0; i < count; i++) {
-      const v = this.l2v(face[i]);
-      p[i * 3]     = v.x;
-      p[i * 3 + 1] = v.y;
-      p[i * 3 + 2] = v.z;
+      const v = this.l2vFace(face[i]);
+      p[i*3] = v.x; p[i*3+1] = v.y; p[i*3+2] = v.z;
     }
     this._faceGeom.attributes.position.needsUpdate = true;
     if (this._faceIndexBuilt) {
@@ -211,25 +206,20 @@ export class SkinMesh {
       this.faceMeshObj.visible = true;
     }
     if (face.length >= 478) {
-      const lCenter = this.l2v(face[468]);
-      const rCenter = this.l2v(face[473]);
-      const inner = this.l2v(face[133]);
-      const outer = this.l2v(face[33]);
-      const eyeR = inner.distanceTo(outer) * 0.26;
-      const r = eyeR > 0.005 ? eyeR : 0.030;
-      this.eyes[0].position.copy(lCenter);
-      this.eyes[0].scale.setScalar(r);
-      this.eyes[0].visible = true;
-      this.eyes[1].position.copy(rCenter);
-      this.eyes[1].scale.setScalar(r);
-      this.eyes[1].visible = true;
+      const lCenter = this.l2vFace(face[468]);
+      const rCenter = this.l2vFace(face[473]);
+      const inner   = this.l2vFace(face[133]);
+      const outer   = this.l2vFace(face[33]);
+      const r = Math.max(inner.distanceTo(outer) * 0.26, 0.030);
+      this.eyes[0].position.copy(lCenter); this.eyes[0].scale.setScalar(r); this.eyes[0].visible = true;
+      this.eyes[1].position.copy(rCenter); this.eyes[1].scale.setScalar(r); this.eyes[1].visible = true;
     } else {
       this.eyes.forEach(e => e.visible = false);
     }
   }
 
   _updateHand(hand, idx) {
-    const segs = this.handSegs[idx];
+    const segs   = this.handSegs[idx];
     const joints = this.handJoints[idx];
     if (!hand || hand.length < 21) {
       segs.forEach(m => m.visible = false);
@@ -237,9 +227,7 @@ export class SkinMesh {
       return;
     }
     const verts = hand.map(lm => this.l2v(lm));
-    FINGER_SEGMENTS.forEach(([a, b, r], i) => {
-      orientCylinder(segs[i], verts[a], verts[b], r);
-    });
+    FINGER_SEGMENTS.forEach(([a, b, r], i) => orientCylinder(segs[i], verts[a], verts[b], r));
     verts.forEach((v, i) => {
       joints[i].position.copy(v);
       joints[i].scale.setScalar(KNUCKLE_RADII[i] ?? 0.012);
